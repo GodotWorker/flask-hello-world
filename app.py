@@ -58,9 +58,72 @@ HTML_TEMPLATE = """
             background: white;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
+        th, td {
+            border: 1px solid #eee;
+            padding: 15px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: 500;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #f1f4f6;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .frequency {
+            font-weight: bold;
+            color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>License Plate Analytics</h1>
+        <div class="stats">
+            <div class="stat-card">
+                <h2>Most Common Plates</h2>
+                <table>
+                    {% for plate, count in most_common %}
+                    <tr>
+                        <td>{{ plate }}</td>
+                        <td class="frequency">Seen {{ count }} times</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="stat-card">
+                <h2>Recent Activity</h2>
+                <table>
+                    {% for plate in recent_plates %}
+                    <tr>
+                        <td>{{ plate.plate }}</td>
+                        <td class="timestamp">{{ plate.time_ago }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+        
+        <table>
+            <tr>
+                <th>License Plate</th>
+                <th>Last Seen</th>
+                <th>Frequency</th>
             </tr>
-            {% else %}
-            <tr><td colspan="3">No data yet</td></tr>
+            {% for entry in sorted_plates %}
+            <tr>
+                <td>{{ entry.plate }}</td>
+                <td class="timestamp">{{ entry.last_seen }}</td>
+                <td class="frequency">{{ entry.count }} times</td>
+            </tr>
             {% endfor %}
         </table>
     </div>
@@ -70,7 +133,51 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def dashboard():
-    return render_template_string(HTML_TEMPLATE, plates=plates)
+    # Calculate plate frequencies
+    plate_counter = Counter(entry['plate'] for entry in plates)
+    most_common = plate_counter.most_common(5)
+    
+    # Format timestamps for recent plates
+    recent_plates = []
+    for plate in reversed(plates[-5:]):
+        time_diff = datetime.now() - datetime.strptime(plate['time'], '%Y-%m-%d %H:%M:%S')
+        minutes = time_diff.total_seconds() / 60
+        
+        if minutes < 60:
+            time_ago = f"{int(minutes)} minutes ago"
+        elif minutes < 1440:  # 24 hours
+            hours = minutes / 60
+            time_ago = f"{int(hours)} hours ago"
+        else:
+            days = int(minutes / 1440)
+            time_ago = f"{days} days ago"
+            
+        recent_plates.append({
+            'plate': plate['plate'],
+            'time_ago': time_ago
+        })
+    
+    # Create plate summary
+    plate_summary = {}
+    for entry in plates:
+        plate_num = entry['plate']
+        if plate_num not in plate_summary:
+            plate_summary[plate_num] = {
+                'plate': plate_num,
+                'count': 0,
+                'last_seen': entry['time']
+            }
+        plate_summary[plate_num]['count'] += 1
+        if entry['time'] > plate_summary[plate_num]['last_seen']:
+            plate_summary[plate_num]['last_seen'] = entry['time']
+    
+    sorted_plates = list(plate_summary.values())
+    sorted_plates.sort(key=lambda x: x['count'], reverse=True)
+    
+    return render_template_string(HTML_TEMPLATE, 
+                                most_common=most_common,
+                                recent_plates=recent_plates,
+                                sorted_plates=sorted_plates)
 
 @app.route('/api/plate', methods=['GET', 'POST'])
 def api_plate():
