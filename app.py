@@ -191,9 +191,8 @@ def api_plate():
 
     if not plate:
         return jsonify({'error': 'Missing plate parameter'}), 400
-
     entry = {
-        'plate': plate,
+        'plate': plate.capitalize(),
         'source': source,
         'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
